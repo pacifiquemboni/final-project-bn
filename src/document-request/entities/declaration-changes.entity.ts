@@ -1,0 +1,37 @@
+import { AutoIncrement, BelongsTo, Column, DataType, ForeignKey, Model, PrimaryKey, Table } from 'sequelize-typescript';
+import { User } from 'src/users/entities/user.entity';
+import { TranscriptRequest } from './transcript-request.entity';
+import { EnglishCertificate } from './english-certificate.entity';
+import { DeclarationCertificate } from './declaration-certificate.entity';
+
+@Table({ tableName: 'declaration_changes' })
+export class DeclarationChanges extends Model<DeclarationChanges> {
+    @PrimaryKey
+    @AutoIncrement
+    @Column
+    declare id: number;
+
+
+    @ForeignKey(() => DeclarationCertificate)
+    @Column({
+        type: DataType.INTEGER,
+        allowNull: false,
+    })
+    requestId: number;
+
+    @Column({
+        type: DataType.ENUM('LIBRARY','FINANCE', 'WELFARE'),
+        allowNull: false,
+    })
+    from:'LIBRARY'|'FINANCE'| 'WELFARE';
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: false,
+    })
+    comment: string;
+
+    @BelongsTo(() => DeclarationCertificate ,{ foreignKey: 'requestId' })
+    declarationCertificate: DeclarationCertificate;
+    // Add any other associations or methods as needed
+}
