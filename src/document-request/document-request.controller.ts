@@ -12,6 +12,24 @@ import { CreateTranscriptChangesDto, CreateTranscriptRequestDto, QuerryFindAllTr
 import { CreateEnglishCertificateChangesDto, CreateEnglishCertificateDto, QuerryFindAllEnglishCertificateRequestDto, UpdateEnglishCertificateRequestDto, UpdateEnglishCertificateRequestStaffDto } from './dto/create-english-certificate.dto';
 import { CreateDeclarationChangeDto, CreateDeclarationProofOfPaymentDto, CreateDeclarationRequestDto, QuerryFindAllDeclarationRequestDto, UpdateDeclarationRequestFinanceDto, UpdateDeclarationRequestLibraryDto, UpdateDeclarationRequestWelfareDto } from './dto/create-decration-request.dto';
 import { JwtAuthGuard } from 'src/auth/auth.guard';
+import { CreateTranscriptDto, QueryFindAllTranscriptRequestDto } from './dto/create-transcript.dto';
+import * as XLSX from 'xlsx';
+import { readFileSync } from 'fs';
+
+
+interface StudentRecord {
+  refNo: string;
+  sex: string;
+  semesters: {
+    semester1: Record<string, { mark: number; grade: string; credit: number }>;
+    semester2: Record<string, { mark: number; grade: string; credit: number }>;
+  };
+  totalCredits: number | null;
+  annualAverage: number | null;
+  previousFailedModules: string[];
+  currentFailedModules: string[];
+  remark: string | null;
+}
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -193,6 +211,7 @@ export class TranscriptRequestController {
 
     return this.documentRequestService.findAllTranscriptRequest(whereClause);
   }
+
   @Get('/transcript/:id')
   @ApiOperation({ summary: 'Get a specific Transcript request by ID' })
   async findOneTranscriptRequest(@Param('id') id: string) {
@@ -227,6 +246,201 @@ export class TranscriptRequestController {
       throw new BadRequestException(`Failed to update transcript request by staff: ${error.message}`);
     }
   }
+
+  @Post('/marksheet')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor(
+      'file',
+      FileUploadConfig.getOptions('./uploads/transcripts'),
+    ),
+  )
+  async createTranscript(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: CreateTranscriptDto,
+  ) {
+    try {
+      const workbook = XLSX.readFile(file.path);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+      const semesterIndicatorRowIndex = 0;
+      const courseCodeRowIndex = 1;
+      const headerRowIndex = 0; // Adjust if necessary
+      const dataStartIndex = 6;
+
+      const semesterRow = data[semesterIndicatorRowIndex];
+      const courseCodeRow = data[courseCodeRowIndex];
+      const headerRow = data[headerRowIndex];
+
+      // Find semester I and II boundaries
+      let semesterIStart = -1;
+      let semesterIIStart = -1;
+
+      for (let i = 0; i < semesterRow.length; i++) {
+        const cell = semesterRow[i]?.toString().trim().toUpperCase();
+        if (cell === 'SEMESTERI' && semesterIStart === -1) {
+          semesterIStart = i;
+        } else if (cell === 'SEMESTERII' && semesterIIStart === -1) {
+          semesterIIStart = i;
+        }
+      }
+
+      if (semesterIStart === -1) semesterIStart = 3;
+      if (semesterIIStart === -1) semesterIIStart = courseCodeRow.length;
+      const creditRowIndex = 4;
+      const creditRow = data[creditRowIndex];
+      // Map column indices to course code and semester
+      const courseColumns = {};
+      for (let i = 3; i < courseCodeRow.length; i++) {
+        const code = courseCodeRow[i];
+        const credit = typeof creditRow[i] === 'number' ? creditRow[i] : 0;
+
+        if (!code || typeof code !== 'string') continue;
+
+        let semester = i >= semesterIIStart ? 'semester2' : 'semester1';
+        courseColumns[i] = { code, semester, credit };
+      }
+      // Build header lookup map
+      const headerMap = {};
+      headerRow.forEach((cell, index) => {
+        if (typeof cell === 'string') {
+          const normalized = cell.trim().toLowerCase();
+          headerMap[normalized] = index;
+        }
+      });
+
+      const getHeaderIndex = (header: string): number | null => {
+        const normalized = header.trim().toLowerCase();
+        return headerMap[normalized] ?? null;
+      };
+
+      const totalCreditsIndex = getHeaderIndex('total credits (σci)');
+      const annualAverageIndex = getHeaderIndex('Annual AV (%)');
+      const prevFailedIndex = getHeaderIndex('previous failed modules');
+      const currFailedIndex = getHeaderIndex('current failed modules');
+      const remarkIndex = getHeaderIndex('remark');
+
+      const gradeMapping = (mark: number) => {
+        if (mark >= 70) return 'A';
+        if (mark >= 60) return 'B';
+        if (mark >= 50) return 'C';
+        if (mark >= 45) return 'D';
+        if (mark >= 40) return 'E';
+        return 'F';
+      };
+
+      const commonFields = {
+        schoolId: dto.schoolId,
+        departmentId: dto.departmentId,
+        program: dto.program,
+        yearOfStudyName: dto.yearOfStudyName,
+        yearOfStudyYear: dto.yearOfStudyYear,
+        status: 'draft',
+      };
+
+      const results: CreateTranscriptDto[] = [];
+
+      for (let i = dataStartIndex; i < data.length; i += 4) {
+        const row = data[i];
+        if (!row || !Array.isArray(row)) continue;
+
+        const refNo = row[1];
+        const sex = row[2];
+
+        const semesters = { semester1: {}, semester2: {} };
+
+        for (const [colIndexStr, value] of Object.entries(courseColumns)) {
+          const { code, semester } = value as { code: string; semester: string };
+          const colIndex = parseInt(colIndexStr, 10);
+          const mark = typeof row[colIndex] === 'number' ? row[colIndex] : null;
+
+          if (mark !== null) {
+            const grade = gradeMapping(mark);
+            const credit = (value as { code: string; semester: string; credit: number }).credit;
+
+
+            semesters[semester][code] = { mark, grade, credit };
+          }
+        }
+
+        const studentRecord: CreateTranscriptDto = {
+          ...commonFields,
+          referenceNo: refNo,
+          refNo,
+          sex,
+          marks: {
+            semesters,
+            totalCredits:
+              totalCreditsIndex !== null && typeof row[totalCreditsIndex] === 'number'
+                ? row[totalCreditsIndex]
+                : null,
+            annualAverage:
+              annualAverageIndex !== null && typeof row[annualAverageIndex] === 'number'
+                ? row[annualAverageIndex]
+                : null,
+            previousFailedModules:
+              prevFailedIndex !== null
+                ? Array.isArray(row[prevFailedIndex])
+                  ? row[prevFailedIndex]
+                  : typeof row[prevFailedIndex] === 'string'
+                    ? [row[prevFailedIndex]]
+                    : []
+                : [],
+            currentFailedModules:
+              currFailedIndex !== null && typeof row[currFailedIndex] === 'string'
+                ? row[currFailedIndex].split(',').map(m => m.trim())
+                : [],
+            remark:
+              remarkIndex !== null && typeof row[remarkIndex] === 'string'
+                ? row[remarkIndex]
+                : null,
+          },
+        };
+
+        await this.documentRequestService.createTranscript(studentRecord);
+        results.push(studentRecord);
+      }
+
+      return {
+        message: 'Marksheets processed successfully',
+        data: results,
+      };
+    } catch (error) {
+      console.error(error);
+      throw new BadRequestException(`Failed to process marksheet. ${error.message || error}`);
+    }
+  }
+
+
+  @Get('/see-transcript')
+  @ApiOperation({ summary: 'Get Transcript requests by filters' })
+  async findTranscript(@Query() query: QueryFindAllTranscriptRequestDto) {
+    const whereClause: any = {};
+
+    // Add the new filters
+    if (query.schoolId) {
+      whereClause.schoolId = query.schoolId;
+    }
+    if (query.departmentId) {
+      whereClause.departmentId = query.departmentId;
+    }
+    if (query.program) {
+      whereClause.program = query.program;
+    }
+    if (query.referenceNo) { // Changed from regnumber to refNo to match your earlier code
+      whereClause.referenceNo = query.referenceNo;
+    }
+
+    // Keep existing filters
+
+    if (query.yearOfStudyName) {
+      whereClause.yearOfStudyName = query.yearOfStudyName;
+    }
+
+    return this.documentRequestService.findTranscrip(whereClause);
+  }
+
 }
 
 @UseGuards(JwtAuthGuard)
@@ -252,7 +466,7 @@ export class EnglishCertificateRequestController {
       const degreeFile = files.find(f => f.fieldname === 'degreeurl');
       const nidFile = files.find(f => f.fieldname === 'nidurl');
       const proofOfPaymentFile = files.find(f => f.fieldname === 'proofofpayment');
-      
+
       if (!nidFile) {
         throw new BadRequestException('National ID file is required.');
       }
@@ -288,7 +502,7 @@ export class EnglishCertificateRequestController {
     @Body() createEnglishCertificateChangesDto: CreateEnglishCertificateChangesDto
   ) {
     try {
-      
+
       const englishChange = await this.documentRequestService.createChangesOnEnglishCertificateRequest(createEnglishCertificateChangesDto);
       return englishChange;
     } catch (error) {
@@ -412,7 +626,7 @@ export class DeclationCertificateRequestController {
     @Body() createDeclarationRequestDto: CreateDeclarationRequestDto
   ) {
     try {
-     
+
 
       return await this.documentRequestService.createDeclarationCertificateRequest(createDeclarationRequestDto);
     } catch (error) {
@@ -426,7 +640,7 @@ export class DeclationCertificateRequestController {
     @Body() createDeclarationChangeDto: CreateDeclarationChangeDto
   ) {
     try {
-      
+
       const declarationChange = await this.documentRequestService.createChangesOnDeclarationCertificateRequest(createDeclarationChangeDto);
       return declarationChange;
     } catch (error) {
@@ -491,7 +705,7 @@ export class DeclationCertificateRequestController {
         throw new BadRequestException('Proof of payment file is required.');
       }
       createProofOfPaymentDto.proofOfpaymentUrl = `${process.env.base_url}/uploads/declaration-proof-of-payment/${file.filename}`;
-      const proofOfPayment = await this.documentRequestService.createProofOfPayment(id,createProofOfPaymentDto);
+      const proofOfPayment = await this.documentRequestService.createProofOfPayment(id, createProofOfPaymentDto);
       return proofOfPayment;
     } catch (error) {
       throw new BadRequestException(`Failed to create proof of payment: ${error.message}`);

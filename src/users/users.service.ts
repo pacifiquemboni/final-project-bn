@@ -7,6 +7,10 @@ import { Sequelize } from 'sequelize-typescript';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
+import { Op } from 'sequelize';
+import { Campus } from 'src/settings/entities/campus.entity';
+import { School } from 'src/settings/entities/school.entity';
+import { Department } from 'src/settings/entities/department.entity';
 
 @Injectable()
 
@@ -54,8 +58,30 @@ export class UsersService {
   }
 
   findAllStaff() {
-    return this.userRepository.findAll();
-  }
+  return this.userRepository.findAll({
+    where: {
+      roles: { [Op.ne]: 'student' } // Using Sequelize operator for "not equal"
+    },
+    include: [
+      {
+        model: this.sequelize.getRepository(Campus),
+        as: 'campus',
+        attributes: ['id', 'name'],
+      },
+      {
+        model: this.sequelize.getRepository(School),
+        as: 'school',
+        attributes: ['id', 'name'],
+      },
+      {
+        model: this.sequelize.getRepository(Department),
+        as: 'department',
+        attributes: ['id', 'name'],
+      },
+    ],
+    order: [['createdAt', 'DESC']],
+  });
+}
 
   findOneStaff(id: number) {
     return this.userRepository.findOne();

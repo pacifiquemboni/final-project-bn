@@ -30,9 +30,13 @@ export class SettingsService {
     }
   }
 
-  async findAll() {
+  async findAllCampus() {
     try {
-      return await this.campusRepository.findAll();
+      return await this.campusRepository.findAll({
+        
+        order
+        : [['createdAt', 'DESC']]
+      });
     } catch (error) {
       throw new Error(`Failed to fetch campuses: ${error.message}`);
     }
@@ -95,13 +99,20 @@ export class SettingsService {
     }
   }
 
-  async findAllSchool() {
-    try {
-      return await this.SchoolRepository.findAll();
-    } catch (error) {
-      throw new Error(`Failed to fetch Schooles: ${error.message}`);
-    }
-  }
+
+  async findAllSchools(campusId?: string) {
+  const whereCondition = campusId ? { campusId } : {};
+  
+  return this.SchoolRepository.findAll({
+    where: whereCondition,
+    include:[
+          {model: this.sequelize.model('Campus'), attributes:['id','name']}
+        ],
+        order
+        : [['createdAt', 'DESC']]
+    // Add other options like relations, order, etc.
+  });
+}
 
   async findOneSchool(id: number) {
     try {
@@ -163,14 +174,17 @@ export class SettingsService {
     }
   }
 
-  async findAllDepartment() {
-    try {
-      return await this.DepartmentRepository.findAll();
-    } catch (error) {
-      throw new Error(`Failed to fetch Departmentes: ${error.message}`);
-    }
-  }
-
+ 
+async findAllDepartment(schoolId?: string) {
+  const whereCondition = schoolId ? { schoolId } : {};
+  
+  return this.DepartmentRepository.findAll({
+    where: whereCondition,
+    order
+        : [['createdAt', 'DESC']]
+    // Add other options like relations, order, etc.
+  });
+}
   async findOneDepartment(id: number) {
     try {
       const Department = await this.DepartmentRepository.findByPk(id,{

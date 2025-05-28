@@ -32,6 +32,7 @@ private get userRepository(){
     }
     const payload = { 
       id: userData.id, 
+      name: userData.firstName,
       username: userData.email, 
       regnumber: userData.regNumber, 
       role: userData.roles, 

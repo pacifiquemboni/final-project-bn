@@ -3,6 +3,7 @@ import { Department } from 'src/settings/entities/department.entity';
 import { School } from 'src/settings/entities/school.entity';
 import { User } from 'src/users/entities/user.entity';
 import { TranscriptChanges } from './transcript-changes.entity';
+import { Transcript } from './transcripts-marks.entity';
 
 @Table({ tableName: 'transcript_requests' })
 export class TranscriptRequest extends Model<TranscriptRequest> {
@@ -16,6 +17,12 @@ export class TranscriptRequest extends Model<TranscriptRequest> {
         allowNull: false,
     })
     regnumber: string;
+    
+    @Column({
+        type: DataType.STRING,
+        allowNull: false,
+    })
+    fullNames: string;
 
     @ForeignKey(() => User)
     @Column({
@@ -92,6 +99,37 @@ export class TranscriptRequest extends Model<TranscriptRequest> {
         allowNull: false,
     })
     levelOfStudy: string;
+
+    // @Column({
+    //     type: DataType.BOOLEAN,
+    //     defaultValue: false,
+    // })
+    // marksReady: boolean;
+
+    // @Column({
+    //     type: DataType.DATE,
+    //     allowNull: true,
+    // })
+    // marksReadyAt: Date;
+
+    // @Column({
+    //     type: DataType.INTEGER,
+    //     allowNull: true,
+    // })
+    // marksPreparedById: number;
+
+    // @ForeignKey(() => Transcript)
+    // @Column({
+    //     type: DataType.INTEGER,
+    //     allowNull: true,
+    // })
+    // transcriptId: number;
+
+    //  @BelongsTo(() => User, { foreignKey: 'marksPreparedById' })
+    // marksPreparedBy: User;
+
+    // @BelongsTo(() => Transcript)
+    // transcript: Transcript;
 
     @BelongsTo(() => User, { foreignKey: 'requestedbyId' })
     requestedBy: User;

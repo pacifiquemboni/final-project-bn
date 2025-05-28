@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { CreateSettingDto } from './dto/create-setting.dto';
 import { UpdateSettingDto } from './dto/update-setting.dto';
 import { CreateCampusDto } from './dto/create-campus.dto';
-import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { UpdateCampusDto } from './dto/update-campus.dto';
 import { CreateSchoolDto } from './dto/create-school.dto';
 import { UpdateSchoolDto } from './dto/update-school.dto';
@@ -15,7 +15,7 @@ import { JwtAuthGuard } from 'src/auth/auth.guard';
 @ApiBearerAuth()
 @Controller('settings')
 export class SettingsController {
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(private readonly settingsService: SettingsService) { }
 
   @Post('/campus')
   @ApiOperation({ summary: 'Create Campus ' })
@@ -27,7 +27,7 @@ export class SettingsController {
   @ApiOperation({ summary: 'get all Campus ' })
 
   findAll() {
-    return this.settingsService.findAll();
+    return this.settingsService.findAllCampus();
   }
 
   @Get(':id')
@@ -50,18 +50,23 @@ export class SettingsController {
   remove(@Param('id') id: number) {
     return this.settingsService.remove(id);
   }
-//department controller
+  //department controller
   @Post('/school')
   @ApiOperation({ summary: 'Create School ' })
   createSchool(@Body() createSchoolDto: CreateSchoolDto) {
     return this.settingsService.createSchool(createSchoolDto);
   }
 
-  @Get('schools')
-  @ApiOperation({ summary: 'get all School ' })
-
-  findAllSchool() {
-    return this.settingsService.findAllSchool();
+  @Get('/all/schools')
+  @ApiOperation({ summary: 'get all School with optional campus filter' })
+  @ApiQuery({
+    name: 'campusId',
+    required: false,
+    type: 'string',
+    description: 'Filter schools by campus ID'
+  })
+  findAllSchool(@Query('campusId') campusId?: string) {
+    return this.settingsService.findAllSchools(campusId);
   }
 
   @Get('school/:id')
@@ -90,11 +95,16 @@ export class SettingsController {
     return this.settingsService.createDepartment(createDepartmentDto);
   }
 
-  @Get('Departments')
-  @ApiOperation({ summary: 'get all Department ' })
-
-  findAllDepartment() {
-    return this.settingsService.findAllDepartment();
+  @Get('Departments/all')
+  @ApiOperation({ summary: 'get all Department with optional campus filter' })
+  @ApiQuery({
+    name: 'schoolId',
+    required: false,
+    type: 'string',
+    description: 'Filter departments by school ID'
+  })
+  findAllDepartment(@Query('schoolId') schoolId?: string) {
+    return this.settingsService.findAllDepartment(schoolId);
   }
 
   @Get('Department/:id')

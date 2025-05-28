@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { CreateRecomandationRequestDto, UpdateRecomandationRequestDto, UpdateRecomandationRequestStaffDto } from './dto/create-recomandation.dto';
 import { UpdateDocumentRequestDto } from './dto/update-document-request.dto';
 import { Sequelize } from 'sequelize-typescript';
@@ -13,12 +13,22 @@ import { CreateDeclarationChangeDto, CreateDeclarationProofOfPaymentDto, CreateD
 import { DeclarationCertificate } from './entities/declaration-certificate.entity';
 import { DeclarationChanges } from './entities/declaration-changes.entity';
 import { DeclarationProofOfPayment } from './entities/declaration-proof-of-payment.entity';
+import { CreateTranscriptDto } from './dto/create-transcript.dto';
+import { Transcript } from './entities/transcripts-marks.entity';
+import { School } from 'src/settings/entities/school.entity';
+import { Department } from 'src/settings/entities/department.entity';
 
 @Injectable()
 export class DocumentRequestService {
   constructor(
     private readonly sequelize: Sequelize,
   ) { }
+  private get schoolRepository() {
+    return this.sequelize.getRepository(School); // Assuming School is a model in your Sequelize setup
+  }
+  private get departmentRepository() {
+    return this.sequelize.getRepository(Department); // Assuming Department is a model in your Sequelize setup
+  }
   private get recomendationLetterRepository() {
     return this.sequelize.getRepository(RecommendationLetter);
   }
@@ -122,7 +132,8 @@ export class DocumentRequestService {
     }
   }
   async findAllTranscriptRequest(querry) {
-    return this.transcriptRequestRepository.findAll({ where: querry }
+    return this.transcriptRequestRepository.findAll({ where: querry , order: [['createdAt', 'DESC']]}
+      
     );
   }
 
@@ -130,6 +141,8 @@ export class DocumentRequestService {
     const transcriptRequest = await this.transcriptRequestRepository.findByPk(id, {
       include: [
         { model: this.transcriptChangesRepository, as: 'transcriptChanges' },
+        { model: this.schoolRepository, as: 'school', attributes: ['name'] },
+        { model: this.departmentRepository, as: 'department', attributes: ['name'] },
       ],
     });
     if (!transcriptRequest) {
@@ -146,6 +159,33 @@ export class DocumentRequestService {
 
     await transcriptRequest.update(updateDocumentRequestDto);
     return transcriptRequest;
+  }
+  private get transcriptModel() {
+    return this.sequelize.getRepository(Transcript); // Assuming EnglishCertificate is also a TranscriptRequest
+  }
+
+  async createTranscript(dto: CreateTranscriptDto): Promise<any> {
+    try {
+      const transcript = await this.transcriptModel.create({ ...dto as any });
+      return transcript;
+    } catch (error) {
+      throw new BadRequestException(`Failed to create transcript ${error.message}`);
+    }
+  }
+  async transcriptExists(filter: {
+    schoolId: number;
+    departmentId: number;
+    program: string;
+    yearOfStudyName: string;
+    yearOfStudyYear: string;
+    referenceNo: string;
+  }): Promise<boolean> {
+    return !!(await this.transcriptModel.findOne({ where: filter }));
+  }
+
+  async findTranscrip(querry) {
+    return this.transcriptModel.findAll({ where: querry }
+    );
   }
 
   private get englishCertificateRepository() {
@@ -177,7 +217,7 @@ export class DocumentRequestService {
   async findOneEnglishCertificateRequest(id: number) {
     const englishCertificateRequest = await this.englishCertificateRepository.findByPk(id, {
       include: [
-        { model: this.englishChangesRepository, as: 'englishChanges', attributes: [ 'comment'] },
+        { model: this.englishChangesRepository, as: 'englishChanges', attributes: ['comment'] },
       ],
     });
     if (!englishCertificateRequest) {
@@ -292,7 +332,7 @@ export class DocumentRequestService {
     const declationRequest = await this.declarationCertificateRepository.findByPk(id, {
       include: [
         { model: this.declarationChangesRepository, as: 'declarationChanges', attributes: ['from', 'comment'] },
-        { model: this.declarationProofOfPaymentRepository, as: 'declarationProofOfPayment', attributes: ['to','proofOfpaymentUrl'] },
+        { model: this.declarationProofOfPaymentRepository, as: 'declarationProofOfPayment', attributes: ['to', 'proofOfpaymentUrl'] },
 
       ],
     });

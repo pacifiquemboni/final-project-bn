@@ -11,6 +11,7 @@ import { DeclarationCertificate } from './entities/declaration-certificate.entit
 import { DeclarationProofOfPayment } from './entities/declaration-proof-of-payment.entity';
 import { DeclarationChanges } from './entities/declaration-changes.entity';
 import { JwtService } from '@nestjs/jwt';
+import { Transcript } from './entities/transcripts-marks.entity';
 
 @Module({
   imports: [SequelizeModule.forFeature([
@@ -21,7 +22,8 @@ import { JwtService } from '@nestjs/jwt';
         EnglishChanges,
         DeclarationCertificate,
         DeclarationChanges,
-        DeclarationProofOfPayment
+        DeclarationProofOfPayment,
+        Transcript
     ])],
   controllers: [DocumentRequestController, TranscriptRequestController, EnglishCertificateRequestController, DeclationCertificateRequestController],
   providers: [DocumentRequestService, JwtService],

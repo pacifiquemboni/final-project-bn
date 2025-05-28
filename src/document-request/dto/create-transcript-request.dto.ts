@@ -133,6 +133,14 @@ export class QuerryFindAllTranscriptRequestDto {
     regnumber?: string;
 
     @ApiProperty({
+        description: 'Full Names of the student',
+        required: false,
+    })
+    @IsOptional()
+    @IsString()
+    fullNames?: string;
+
+    @ApiProperty({
         description: 'The ID of the user who is requesting the transcript',
         required: false,
     })
@@ -155,12 +163,10 @@ export class QuerryFindAllTranscriptRequestDto {
     status?: 'PENDING' | 'APPROVED' | 'REJECTED';
 
     @ApiProperty({ description: 'The school ID', required: false })
-    @IsInt()
     @IsOptional()
     schoolId?: number;
 
     @ApiProperty({ description: 'The department ID', required: false })
-    @IsInt()
     @IsOptional()
     departmentId?: number;
     @ApiProperty({ description: 'The start date for filtering requests',  required: false })
