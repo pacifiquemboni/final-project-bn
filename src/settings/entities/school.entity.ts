@@ -38,6 +38,12 @@ export class School extends Model<School> {
     })
     deanOfSchool: string;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    stamp: string;
+
     @BelongsTo(() => Campus)
     campus: Campus
 

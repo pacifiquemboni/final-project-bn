@@ -124,6 +124,13 @@ export class User extends Model<User> {
         allowNull: true
     })
     phoneNumber: string;
+
+    @Column({
+        type: DataType.STRING(225),
+        allowNull: true
+    })
+    signature: string;
+    
     @BelongsTo(() => Campus)
     campus: Campus
     @BelongsTo(() => School)

@@ -3,7 +3,7 @@ import { CreateRecomandationRequestDto, UpdateRecomandationRequestDto, UpdateRec
 import { UpdateDocumentRequestDto } from './dto/update-document-request.dto';
 import { Sequelize } from 'sequelize-typescript';
 import { RecommendationLetter } from './entities/recomandation-letter.entity';
-import { CreateTranscriptChangesDto, CreateTranscriptRequestDto, UpdateTranscriptRequestDto } from './dto/create-transcript-request.dto';
+import { CreateTranscriptChangesDto, CreateTranscriptRequestDto, HodUpdateTranscriptRequestDto, UpdateTranscriptRequestDto } from './dto/create-transcript-request.dto';
 import { TranscriptRequest } from './entities/transcript-request.entity';
 import { TranscriptChanges } from './entities/transcript-changes.entity';
 import { CreateEnglishCertificateChangesDto, CreateEnglishCertificateDto, UpdateEnglishCertificateRequestDto, UpdateEnglishCertificateRequestStaffDto } from './dto/create-english-certificate.dto';
@@ -17,11 +17,16 @@ import { CreateTranscriptDto } from './dto/create-transcript.dto';
 import { Transcript } from './entities/transcripts-marks.entity';
 import { School } from 'src/settings/entities/school.entity';
 import { Department } from 'src/settings/entities/department.entity';
+import { User } from 'src/users/entities/user.entity';
+import { TranscriptWorkFlow } from './entities/transcriptWorkflow';
+import { log } from 'console';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class DocumentRequestService {
   constructor(
     private readonly sequelize: Sequelize,
+    private readonly mailService: MailService, // Assuming you have a MailService for sending emails
   ) { }
   private get schoolRepository() {
     return this.sequelize.getRepository(School); // Assuming School is a model in your Sequelize setup
@@ -52,7 +57,19 @@ export class DocumentRequestService {
   }
 
   findAllRecomandations(querry) {
-    return this.recomendationLetterRepository.findAll({ where: querry });
+    return this.recomendationLetterRepository.findAll(
+      {
+        where: querry,
+        include: [
+          { model: this.schoolRepository, as: 'school', attributes: ['name'] },
+          { model: this.departmentRepository, as: 'department', attributes: ['name'] },
+          { model: User, as: 'requestedBy', attributes: ['firstName', 'lastName', 'email'] },
+          { model: User, as: 'assignedTo', attributes: ['firstName', 'lastName', 'email'] },
+        ],
+        order: [['createdAt', 'DESC']]
+      },
+
+    );
   }
 
 
@@ -95,7 +112,7 @@ export class DocumentRequestService {
   async createTranscriptRequest(createTranscriptRequestDto: CreateTranscriptRequestDto) {
     try {
       const existingRequest = await this.transcriptRequestRepository.findOne({
-        where: { regnumber: createTranscriptRequestDto.regnumber, status: 'PENDING' },
+        where: { regnumber: createTranscriptRequestDto.regnumber, levelOfStudy: createTranscriptRequestDto.levelOfStudy, status: 'PENDING' },
       });
 
       if (existingRequest) {
@@ -131,9 +148,90 @@ export class DocumentRequestService {
       throw new BadRequestException(`Failed to create changes on transcript request: ${error.message}`);
     }
   }
+
+  private get transcriptModel() {
+    return this.sequelize.getRepository(Transcript); // Assuming TranscriptRequest is also a TranscriptRequest
+  }
+  async HodUpdateTranscriptRequest(userId: number, updateDocumentRequestDto: HodUpdateTranscriptRequestDto) {
+    const transcriptRequest = await this.transcriptRequestRepository.findOne({
+      where: { id: updateDocumentRequestDto.requestId, status: 'PENDING' },
+    });
+
+    if (!transcriptRequest) {
+      throw new BadRequestException(`Transcript request with ID #${updateDocumentRequestDto.requestId} not found or already processed.`);
+    }
+    const transcriptExists = await this.transcriptModel.findOne({
+      where: { id: updateDocumentRequestDto.transcriptId, },
+    },);
+    if (!transcriptExists) {
+      throw new BadRequestException(`Transcript with ID #${updateDocumentRequestDto.transcriptId} not found.`);
+    }
+    const user = await this.sequelize.getRepository(User).findByPk(userId);
+    if (!user) {
+      throw new BadRequestException(`User with ID #${userId} not found.`);
+    }
+
+    transcriptRequest.set('status', 'PROCESSING');
+    await transcriptRequest.save();
+
+    transcriptExists.set('status', 'hod-approved');
+    await transcriptExists.save();
+
+    transcriptExists.set('hodSignatureImage', user.dataValues.signature);
+    await transcriptExists.save();
+
+    transcriptExists.set('hodSignatureAt', new Date());
+    await transcriptExists.save();
+
+    return 'Transcript request Approved successfully';
+  }
+
+  async deanUpdateTranscriptRequest(userId: number, updateDocumentRequestDto: HodUpdateTranscriptRequestDto) {
+    const transcriptRequest = await this.transcriptRequestRepository.findOne({
+      where: { id: updateDocumentRequestDto.requestId, status: 'PROCESSING' },
+    });
+    if (!transcriptRequest) {
+      throw new BadRequestException(`Transcript request with ID #${updateDocumentRequestDto.requestId} not found or already processed.`);
+    }
+    const transcriptExists = await this.transcriptModel.findOne({
+      where: { id: updateDocumentRequestDto.transcriptId, },
+    },);
+    if (!transcriptExists) {
+      throw new BadRequestException(`Transcript with ID #${updateDocumentRequestDto.transcriptId} not found.`);
+    }
+    const user = await this.sequelize.getRepository(User).findByPk(userId);
+    if (!user) {
+      throw new BadRequestException(`User with ID #${userId} not found.`);
+    }
+    const school = await this.schoolRepository.findByPk(user.dataValues.schoolId);
+    if (!school) {
+      throw new BadRequestException(`School with ID #${transcriptRequest.schoolId} not found.`);
+    }
+
+    transcriptRequest.set('status', 'APPROVED');
+    await transcriptRequest.save();
+
+    transcriptExists.set('status', 'dean-approved');
+    await transcriptExists.save();
+
+    transcriptExists.set('schoolStampImage', school.dataValues.stamp);
+    await transcriptExists.save();
+
+    transcriptExists.set('deanSignatureImage', user.dataValues.signature);
+    await transcriptExists.save();
+
+    transcriptExists.set('schoolStampAt', new Date());
+    await transcriptExists.save();
+
+    return 'Transcript request Approved successfully';
+
+  }
+
+
+
   async findAllTranscriptRequest(querry) {
-    return this.transcriptRequestRepository.findAll({ where: querry , order: [['createdAt', 'DESC']]}
-      
+    return this.transcriptRequestRepository.findAll({ where: querry, order: [['createdAt', 'DESC']] }
+
     );
   }
 
@@ -151,6 +249,50 @@ export class DocumentRequestService {
     return transcriptRequest;
   }
 
+  async updateTranscriptFileUrl(id: number, fileUrl: string) {
+    const transcriptRequest = await this.transcriptRequestRepository.findOne({ where: { id } });
+    if (!transcriptRequest) {
+      throw new BadRequestException(`Transcript request with ID #${id} not found.`);
+    }
+    // console.log('transcriptRequest', transcriptRequest.dataValues);
+    const transcriptData = transcriptRequest.dataValues
+    console.log('transcript', transcriptData.regnumber);
+
+    const user = await this.sequelize.getRepository(User).findOne({ where: { regNumber: transcriptData.regnumber } });
+    if (!user) {
+      throw new BadRequestException(`Student with RegNumber #${transcriptRequest.regnumber} not found.`);
+    }
+    transcriptRequest.set('fileurl', fileUrl);
+    await transcriptRequest.save();
+    // console.log('user', user.dataValues.email);
+
+    // Send the file link to the user's email
+    await this.mailService.sendMail(
+      user.dataValues.email,
+      'Your Official Transcript is Now Available',
+      `
+    <div style="font-family: Arial, sans-serif; font-size: 15px; color: #333;">
+      <p>Dear ${user.dataValues.firstName || user.dataValues.lastName},</p>
+
+      <p>We are pleased to inform you that your official transcript has been successfully processed and is now available for download.</p>
+
+      <p>You can securely access your transcript using the link below:</p>
+
+      <p>
+        <a href="${fileUrl}" style="color: #1a73e8; text-decoration: none; font-weight: bold;">
+          Download Your Transcript
+        </a>
+      </p>
+
+      <p>If you have any questions or need further assistance, please don't hesitate to contact our support team.</p>
+
+      <p>Best regards,<br/>The UniDoc Team</p>
+    </div>
+  `
+    );
+
+    return transcriptRequest;
+  }
   async updateTranscriptRequestByStaff(id: number, updateDocumentRequestDto: UpdateTranscriptRequestDto) {
     const transcriptRequest = await this.transcriptRequestRepository.findByPk(id);
     if (!transcriptRequest) {
@@ -160,16 +302,15 @@ export class DocumentRequestService {
     await transcriptRequest.update(updateDocumentRequestDto);
     return transcriptRequest;
   }
-  private get transcriptModel() {
-    return this.sequelize.getRepository(Transcript); // Assuming EnglishCertificate is also a TranscriptRequest
-  }
+
 
   async createTranscript(dto: CreateTranscriptDto): Promise<any> {
     try {
+
       const transcript = await this.transcriptModel.create({ ...dto as any });
       return transcript;
     } catch (error) {
-      throw new BadRequestException(`Failed to create transcript ${error.message}`);
+      throw new BadRequestException(` ${error.message}`);
     }
   }
   async transcriptExists(filter: {
@@ -187,7 +328,37 @@ export class DocumentRequestService {
     return this.transcriptModel.findAll({ where: querry }
     );
   }
+  async findUploadedMarksSummary() {
+    // Group by the specified fields and count the number of records in each group
+    const results = await this.transcriptModel.findAll({
+      attributes: [
+        'schoolId',
+        'departmentId',
+        'program',
+        'yearOfStudyName',
+        'yearOfStudyYear',
+        [this.sequelize.fn('COUNT', this.sequelize.col('id')), 'numberOfRecords'],
+        [this.sequelize.fn('MAX', this.sequelize.col('createdAt')), 'uploadedDate'],
+      ],
+      group: [
+        'schoolId',
+        'departmentId',
+        'program',
+        'yearOfStudyName',
+        'yearOfStudyYear'
+      ],
+      raw: true,
+      order: [
+        ['schoolId', 'DESC'],
+        ['departmentId', 'DESC'],
+        ['program', 'DESC'],
+        ['yearOfStudyName', 'DESC'],
+        ['yearOfStudyYear', 'DESC']
+      ],
+    });
 
+    return results;
+  }
   private get englishCertificateRepository() {
     return this.sequelize.getRepository(EnglishCertificate); // Assuming EnglishCertificate is also a TranscriptRequest
   }

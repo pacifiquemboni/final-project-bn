@@ -8,13 +8,15 @@ import { Op } from 'sequelize';
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
 import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadConfig } from 'src/utils/file-upload-config';
-import { CreateTranscriptChangesDto, CreateTranscriptRequestDto, QuerryFindAllTranscriptRequestDto, UpdateTranscriptRequestDto } from './dto/create-transcript-request.dto';
+import { CreateTranscriptChangesDto, CreateTranscriptRequestDto, HodUpdateTranscriptRequestDto, QuerryFindAllTranscriptRequestDto, UpdateTranscriptRequestDto } from './dto/create-transcript-request.dto';
 import { CreateEnglishCertificateChangesDto, CreateEnglishCertificateDto, QuerryFindAllEnglishCertificateRequestDto, UpdateEnglishCertificateRequestDto, UpdateEnglishCertificateRequestStaffDto } from './dto/create-english-certificate.dto';
 import { CreateDeclarationChangeDto, CreateDeclarationProofOfPaymentDto, CreateDeclarationRequestDto, QuerryFindAllDeclarationRequestDto, UpdateDeclarationRequestFinanceDto, UpdateDeclarationRequestLibraryDto, UpdateDeclarationRequestWelfareDto } from './dto/create-decration-request.dto';
 import { JwtAuthGuard } from 'src/auth/auth.guard';
 import { CreateTranscriptDto, QueryFindAllTranscriptRequestDto } from './dto/create-transcript.dto';
 import * as XLSX from 'xlsx';
 import { readFileSync } from 'fs';
+import { Transcript } from './entities/transcripts-marks.entity';
+import { Sequelize } from 'sequelize-typescript';
 
 
 interface StudentRecord {
@@ -116,7 +118,10 @@ export class DocumentRequestController {
 @Controller('transcript-request')
 
 export class TranscriptRequestController {
-  constructor(private readonly documentRequestService: DocumentRequestService) { }
+  constructor(private readonly documentRequestService: DocumentRequestService,
+    private readonly sequelize: Sequelize,
+
+  ) { }
   @Post('/transcript')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
@@ -177,6 +182,65 @@ export class TranscriptRequestController {
       return transcriptChange;
     } catch (error) {
       throw new BadRequestException(`Failed to create changes on transcript request: ${error.message}`);
+    }
+  }
+
+  @Patch('/transcript/hod-approve/:userId')
+  @ApiOperation({ summary: 'Approve Transcript request by HOD' })
+  async hodUpdateTranscriptRequest(
+    @Param('userId') userId: number,
+    @Body() updateDocumentRequestDto: HodUpdateTranscriptRequestDto,
+  ) {
+    try {
+      return await this.documentRequestService.HodUpdateTranscriptRequest(userId, updateDocumentRequestDto);
+    } catch (error) {
+      throw new BadRequestException(`Failed to approve transcript request by HOD: ${error.message}`);
+    }
+  }
+
+  @Patch('/transcript/dean-approve/:userId')
+  @ApiOperation({ summary: 'Approve Transcript request by Dean' })
+  async deanUpdateTranscriptRequest(
+    @Param('userId') userId: number,
+    @Body() updateDocumentRequestDto: HodUpdateTranscriptRequestDto,
+  ) {
+    try {
+      return await this.documentRequestService.deanUpdateTranscriptRequest(userId, updateDocumentRequestDto);
+    } catch (error) {
+      throw new BadRequestException(`Failed to approve transcript request by Dean: ${error.message}`);
+    }
+  }
+
+
+  @Patch('/transcript/upload-file/:requestId')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor(
+      'fileurl',
+      FileUploadConfig.getOptions('./uploads/generate-transcripts'),
+    ),
+  )
+  @ApiOperation({ summary: 'Upload a file for a specific transcript request and transcript' })
+  async uploadTranscriptFile(
+    @Param('requestId') requestId: string,
+    @UploadedFile() fileurl: Express.Multer.File,
+  ) {
+    try {
+      const request = await this.documentRequestService.findOneRequest(+requestId);
+      if (!request) {
+        throw new BadRequestException(`Transcript request with ID ${requestId} not found.`);
+      }
+      if (!fileurl) {
+        throw new BadRequestException('File is required.');
+      }
+      const fileUrl = `${process.env.base_url}/uploads/generate-transcripts/${fileurl.filename}`;
+
+      request.fileurl = fileUrl; // Update the request with the file URL
+      await this.documentRequestService.updateTranscriptFileUrl(+requestId, fileUrl);
+      // You should implement this method in your service to handle the file URL storage logic
+
+    } catch (error) {
+      throw new BadRequestException(`Failed to upload transcript file: ${error.message}`);
     }
   }
 
@@ -245,6 +309,10 @@ export class TranscriptRequestController {
     } catch (error) {
       throw new BadRequestException(`Failed to update transcript request by staff: ${error.message}`);
     }
+  }
+
+  private get transcriptModel() {
+    return this.sequelize.getRepository(Transcript); // Assuming TranscriptRequest is also a TranscriptRequest
   }
 
   @Post('/marksheet')
@@ -340,6 +408,7 @@ export class TranscriptRequestController {
       };
 
       const results: CreateTranscriptDto[] = [];
+      const skipped: any[] = [];
 
       for (let i = dataStartIndex; i < data.length; i += 4) {
         const row = data[i];
@@ -347,6 +416,12 @@ export class TranscriptRequestController {
 
         const refNo = row[1];
         const sex = row[2];
+
+        dto.referenceNo = refNo; // Ensure refNo is set in the DTO
+        console.log(`Processing student with reference number: ${refNo}`);
+
+        // Check if transcript for this student already exists
+
 
         const semesters = { semester1: {}, semester2: {} };
 
@@ -358,7 +433,6 @@ export class TranscriptRequestController {
           if (mark !== null) {
             const grade = gradeMapping(mark);
             const credit = (value as { code: string; semester: string; credit: number }).credit;
-
 
             semesters[semester][code] = { mark, grade, credit };
           }
@@ -404,11 +478,14 @@ export class TranscriptRequestController {
 
       return {
         message: 'Marksheets processed successfully',
+        created: results.length,
+        skipped: skipped.length,
+        skippedDetails: skipped,
         data: results,
       };
     } catch (error) {
       console.error(error);
-      throw new BadRequestException(`Failed to process marksheet. ${error.message || error}`);
+      throw new BadRequestException(` ${error.message || error}`);
     }
   }
 
@@ -441,7 +518,17 @@ export class TranscriptRequestController {
     return this.documentRequestService.findTranscrip(whereClause);
   }
 
+  @Get('/see-oploaded-marks')
+  @ApiOperation({ summary: 'Get Transcript requests by filters' })
+  async findUploadedMarks() {
+
+
+    return this.documentRequestService.findUploadedMarksSummary();
+  }
+
 }
+
+
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()

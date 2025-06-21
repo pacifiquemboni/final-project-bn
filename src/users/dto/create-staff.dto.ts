@@ -64,4 +64,9 @@ export class CreateStaffDto {
   @IsOptional()
   @IsString()
   phoneNumber?: string;
+
+  @ApiPropertyOptional({ example: 'https://example.com/profile.jpg', format: 'binary' })
+  @IsOptional()
+  @IsString()
+  signature?: string;
 }

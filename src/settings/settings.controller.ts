@@ -1,15 +1,17 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { CreateSettingDto } from './dto/create-setting.dto';
 import { UpdateSettingDto } from './dto/update-setting.dto';
 import { CreateCampusDto } from './dto/create-campus.dto';
-import { ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { UpdateCampusDto } from './dto/update-campus.dto';
 import { CreateSchoolDto } from './dto/create-school.dto';
 import { UpdateSchoolDto } from './dto/update-school.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { JwtAuthGuard } from 'src/auth/auth.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { FileUploadConfig } from 'src/utils/file-upload-config';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -51,9 +53,22 @@ export class SettingsController {
     return this.settingsService.remove(id);
   }
   //department controller
+
+
   @Post('/school')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor(
+      'stamp',
+      FileUploadConfig.getOptions('./uploads/stamps'),
+    ),
+  )
   @ApiOperation({ summary: 'Create School ' })
-  createSchool(@Body() createSchoolDto: CreateSchoolDto) {
+  createSchool(@Body() createSchoolDto: CreateSchoolDto,
+    @UploadedFile() stamp: Express.Multer.File) {
+    if (stamp) {
+      createSchoolDto.stamp = `${process.env.base_url}/uploads/stamps/${stamp.filename}`; // Save the filename in the DTO
+    }
     return this.settingsService.createSchool(createSchoolDto);
   }
 

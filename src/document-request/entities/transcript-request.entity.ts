@@ -89,10 +89,10 @@ export class TranscriptRequest extends Model<TranscriptRequest> {
     fileurl: string;
 
     @Column({
-        type: DataType.ENUM('PENDING', 'APPROVED', 'REJECTED'),
+        type: DataType.ENUM('PENDING','PROCESSING', 'APPROVED', 'REJECTED'),
         allowNull: false,
     })
-    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    status: 'PENDING' | 'PROCESSING' | 'APPROVED' | 'REJECTED';
 
     @Column({
         type: DataType.STRING,

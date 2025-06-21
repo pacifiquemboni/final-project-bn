@@ -74,12 +74,11 @@ export class QuerryFindAllRecomandationRequestDto {
 
 
     @ApiProperty({ description: 'The ID of the user who requested the recommendation', required: false })
-    @IsInt()
+
     @IsOptional()
     requestedbyId?: number;
 
     @ApiProperty({ description: 'The ID of the user assigned to handle the request', required: false })
-    @IsInt()
     @IsOptional()
     assignedToId?: number;
 
@@ -90,12 +89,12 @@ export class QuerryFindAllRecomandationRequestDto {
 
 
     @ApiProperty({ description: 'The school ID', required: false })
-    @IsInt()
+   
     @IsOptional()
     schoolId?: number;
 
     @ApiProperty({ description: 'The department ID',  required: false })
-    @IsInt()
+    
     @IsOptional()
     departmentId?: number;
 

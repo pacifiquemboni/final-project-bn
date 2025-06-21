@@ -186,3 +186,18 @@ export class UpdateTranscriptRequestDto {
     @IsString()
     fileurl?: string;
 }
+
+export class HodUpdateTranscriptRequestDto {
+    @ApiProperty({
+        description: 'The ID of the transcript request being updated',
+        example: 1,
+    })
+    @IsNotEmpty()
+    requestId: number;
+     @ApiProperty({
+        description: 'The ID of the transcript being updated',
+        example: 1,
+    })
+    @IsNotEmpty()
+    transcriptId: number;
+}

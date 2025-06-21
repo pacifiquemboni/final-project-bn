@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiProperty } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateStudentDto } from './dto/create-student.dto';
@@ -6,6 +6,8 @@ import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { IsEnum } from 'class-validator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { FileUploadConfig } from 'src/utils/file-upload-config';
 
 // Create an enum for the roles
 enum StaffRole {
@@ -31,7 +33,7 @@ class AddRoleDto {
 }
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Post('register-student')
   @ApiOperation({ summary: 'Register a new student' })
@@ -65,9 +67,20 @@ export class UsersController {
     return this.usersService.updateStudent(+id, updateStudentDto);
   }
   @Post('register-staff')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor(
+      'signature',
+      FileUploadConfig.getOptions('./uploads/signatures'),
+    ),
+  )
   @ApiBody({ type: CreateStaffDto, description: 'Form data for registering a new staff member' })
   @ApiOperation({ summary: 'Register a new staff member by admin' })
-  registerStaff(@Body() createStaffDto: CreateStaffDto) {
+  registerStaff(@Body() createStaffDto: CreateStaffDto,
+    @UploadedFile() signature: Express.Multer.File) {
+    if (signature) {
+      createStaffDto.signature = `${process.env.base_url}/uploads/signatures/${signature.filename}`; // Save the file path in the DTO
+    }
     return this.usersService.registerStaff(createStaffDto);
   }
 
