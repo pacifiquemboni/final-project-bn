@@ -13,6 +13,7 @@ import { DeclarationChanges } from './entities/declaration-changes.entity';
 import { JwtService } from '@nestjs/jwt';
 import { Transcript } from './entities/transcripts-marks.entity';
 import { MailService } from 'src/mail/mail.service';
+import { ToWhomLetter } from './entities/toWhom.entity';
 
 @Module({
   imports: [SequelizeModule.forFeature([
@@ -24,7 +25,8 @@ import { MailService } from 'src/mail/mail.service';
         DeclarationCertificate,
         DeclarationChanges,
         DeclarationProofOfPayment,
-        Transcript
+        Transcript,
+        ToWhomLetter
     ])],
   controllers: [DocumentRequestController, TranscriptRequestController, EnglishCertificateRequestController, DeclationCertificateRequestController],
   providers: [DocumentRequestService, JwtService, MailService],

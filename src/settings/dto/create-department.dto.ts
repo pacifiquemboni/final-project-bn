@@ -3,7 +3,7 @@ import { IsString, IsOptional, IsInt, IsNotEmpty } from 'class-validator';
 
 export class CreateDepartmentDto {
     @ApiProperty({ description: 'The ID of the school this department belongs to', example: 1 })
-    @IsInt()
+     
     @IsNotEmpty()
     schoolId: number;
 

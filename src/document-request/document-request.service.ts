@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { CreateRecomandationRequestDto, UpdateRecomandationRequestDto, UpdateRecomandationRequestStaffDto } from './dto/create-recomandation.dto';
+import { CreateRecomandationRequestDto, CreateToWhomRequestDto, UpdateRecomandationRequestDto, UpdateRecomandationRequestStaffDto } from './dto/create-recomandation.dto';
 import { UpdateDocumentRequestDto } from './dto/update-document-request.dto';
 import { Sequelize } from 'sequelize-typescript';
 import { RecommendationLetter } from './entities/recomandation-letter.entity';
@@ -21,6 +21,7 @@ import { User } from 'src/users/entities/user.entity';
 import { TranscriptWorkFlow } from './entities/transcriptWorkflow';
 import { log } from 'console';
 import { MailService } from 'src/mail/mail.service';
+import { ToWhomLetter } from './entities/toWhom.entity';
 
 @Injectable()
 export class DocumentRequestService {
@@ -36,6 +37,9 @@ export class DocumentRequestService {
   }
   private get recomendationLetterRepository() {
     return this.sequelize.getRepository(RecommendationLetter);
+  }
+  private get toWhomLetterRepository() {
+    return this.sequelize.getRepository(ToWhomLetter);
   }
   async createRecomandnation(createRecomandationRequestDto: CreateRecomandationRequestDto) {
     try {
@@ -55,7 +59,94 @@ export class DocumentRequestService {
       throw new BadRequestException(`Failed to create recommendation: ${error.message}`);
     }
   }
+async createToWhom(createToWhomRequestDto: CreateToWhomRequestDto) {
+    try {
+      const existingRequest = await this.toWhomLetterRepository.findOne({
+        where: { regnumber: createToWhomRequestDto.regnumber, status: 'PENDING' },
+      });
 
+      if (existingRequest) {
+        throw new BadRequestException('Sorry you still have pending request.');
+      }
+
+      return await this.toWhomLetterRepository.create({
+        ...createToWhomRequestDto,
+        status: 'PENDING'
+      } as ToWhomLetter);
+    } catch (error) {
+      throw new BadRequestException(`Failed to create to-whom-it-may-concern letter: ${error.message}`);
+    }
+  }
+  async findAllToWhom(querry) {
+    return this.toWhomLetterRepository.findAll(
+      {
+        where: querry,
+        include: [
+          { model: this.schoolRepository, as: 'school', attributes: ['name'] },
+          { model: this.departmentRepository, as: 'department', attributes: ['name'] },
+          { model: User, as: 'requestedBy', attributes: ['firstName', 'lastName', 'email'] },
+          { model: User, as: 'assignedTo', attributes: ['firstName', 'lastName', 'email'] },
+        ],
+        order: [['createdAt', 'DESC']]
+      },
+
+    );
+  }
+  async findOneToWhom(id: number) {
+    const toWhom = await this.toWhomLetterRepository.findByPk(id);
+    if (!toWhom) {
+      throw new BadRequestException(`To-whom-it-may-concern letter with ID #${id} not found.`);
+    }
+    return toWhom;
+  }
+  async updateToWhomByStudent(id: number, updateRecomandationRequestDto: UpdateRecomandationRequestDto) {
+    const toWhom = await this.toWhomLetterRepository.findByPk(id);
+    if (!toWhom) {
+      throw new BadRequestException(`To-whom-it-may-concern letter with ID #${id} not found.`);
+    }
+    await toWhom.update(updateRecomandationRequestDto);
+    return toWhom;
+  }
+  async updateToWhomByStaff(id: number, updateRecomandationRequestStaffDto: UpdateRecomandationRequestStaffDto) {
+    const toWhom = await this.toWhomLetterRepository.findByPk(id);
+    if (!toWhom) {
+      throw new BadRequestException(`To-whom-it-may-concern letter with ID #${id} not found.`);
+    }
+    if (!updateRecomandationRequestStaffDto.fileurl) {
+      throw new BadRequestException(`File URL is required.`);
+    }
+    console.log('toWhom', toWhom.dataValues);
+    const user = await this.sequelize.getRepository(User).findByPk(toWhom.dataValues.requestedbyId);
+    if (!user) {
+      throw new BadRequestException(`User with ID #${toWhom.dataValues.requestedbyId} not found.`);
+    }
+    console.log('user', user.dataValues);
+    await this.mailService.sendMail(
+      user.dataValues.email,
+      'Your To-Whom-It-May-Concern Letter is Now Available',
+      `
+    <div style="font-family: Arial, sans-serif; font-size: 15px; color: #333;">
+      <p>Dear ${user.dataValues.firstName || user.dataValues.lastName},</p>
+
+      <p>We are pleased to inform you that your to-whom-it-may-concern letter has been processed and is now available for download.</p>
+
+      <p>You can securely access your letter using the link below:</p>
+
+      <p>
+      <a href="${updateRecomandationRequestStaffDto.fileurl}" style="color: #1a73e8; text-decoration: none; font-weight: bold;">
+        Download Your To-Whom-It-May-Concern Letter
+      </a>
+      </p>
+
+      <p>If you have any questions or need further assistance, please don't hesitate to contact our support team.</p>
+
+      <p>Best regards,<br/>The UniDoc Team</p>
+    </div>
+    `
+    );
+    await toWhom.update(updateRecomandationRequestStaffDto);
+    return toWhom;
+  }
   findAllRecomandations(querry) {
     return this.recomendationLetterRepository.findAll(
       {
@@ -100,7 +191,35 @@ export class DocumentRequestService {
     if (!updateRecomandationRequestStaffDto.fileurl) {
       throw new BadRequestException(`File URL is required.`);
     }
+    console.log('recommendation', recommendation.dataValues);
+    const user = await this.sequelize.getRepository(User).findByPk(recommendation.dataValues.requestedbyId);
+    if (!user) {
+      throw new BadRequestException(`User with ID #${recommendation.dataValues.requestedbyId} not found.`);
+    }
+    console.log('user', user.dataValues);
+    await this.mailService.sendMail(
+      user.dataValues.email,
+      'Your Recommendation Letter is Now Available',
+      `
+    <div style="font-family: Arial, sans-serif; font-size: 15px; color: #333;">
+      <p>Dear ${user.dataValues.firstName || user.dataValues.lastName},</p>
 
+      <p>We are pleased to inform you that your recommendation letter has been processed and is now available for download.</p>
+
+      <p>You can securely access your recommendation letter using the link below:</p>
+
+      <p>
+      <a href="${updateRecomandationRequestStaffDto.fileurl}" style="color: #1a73e8; text-decoration: none; font-weight: bold;">
+        Download Your Recommendation Letter
+      </a>
+      </p>
+
+      <p>If you have any questions or need further assistance, please don't hesitate to contact our support team.</p>
+
+      <p>Best regards,<br/>The UniDoc Team</p>
+    </div>
+    `
+    );
     await recommendation.update(updateRecomandationRequestStaffDto);
     return recommendation;
   }

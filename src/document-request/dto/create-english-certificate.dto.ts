@@ -7,19 +7,19 @@ export class CreateEnglishCertificateDto {
     regnumber: string;
 
     @ApiProperty({ description: 'The ID of the user who requested the certificate', required: true, example: 1 })
-    @IsInt()
+     
     requestedbyId: number;
 
     @ApiProperty({ description: 'The school ID', required: true, example: 101 })
-    @IsInt()
+     
     schoolId: number;
 
     @ApiProperty({ description: 'The department ID', required: true, example: 202 })
-    @IsInt()
+     
     departmentId: number;
 
     @ApiProperty({ description: 'The ID of the user assigned to handle the request', required: false, example: 3 })
-    @IsInt()
+     
     @IsOptional()
     assignedToId?: number;
 
@@ -100,12 +100,12 @@ export class QuerryFindAllEnglishCertificateRequestDto {
     regnumber?: string;
 
     @ApiProperty({ description: 'The ID of the user who requested the certificate', required: false })
-    @IsInt()
+     
     @IsOptional()
     requestedbyId?: number;
 
     @ApiProperty({ description: 'The ID of the user assigned to handle the request', required: false })
-    @IsInt()
+     
     @IsOptional()
     assignedToId?: number;
 

@@ -3,7 +3,7 @@ import { IsString, IsOptional, IsInt, IsNotEmpty } from 'class-validator';
 
 export class UpdateSchoolDto {
     @ApiProperty({ description: 'The ID of the campus this school belongs to', example: 1 })
-    @IsInt()
+     
     @IsNotEmpty()
     campusId: number;
 
@@ -13,7 +13,7 @@ export class UpdateSchoolDto {
     name: string;
 
     @ApiProperty({ description: 'The number of departments in the school', example: 5 })
-    @IsInt()
+     
     @IsOptional()
     departments?: number;
 

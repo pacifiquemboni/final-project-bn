@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UploadedFiles
 import { DocumentRequestService } from './document-request.service';
 import { CreateDocumentRequestDto } from './dto/create-document-request.dto';
 import { UpdateDocumentRequestDto } from './dto/update-document-request.dto';
-import { CreateRecomandationRequestDto, QuerryFindAllRecomandationRequestDto, UpdateRecomandationRequestDto, UpdateRecomandationRequestStaffDto } from './dto/create-recomandation.dto';
+import { CreateRecomandationRequestDto, CreateToWhomRequestDto, QuerryFindAllRecomandationRequestDto, UpdateRecomandationRequestDto, UpdateRecomandationRequestStaffDto, UpdateToWhomRequestStaffDto } from './dto/create-recomandation.dto';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { Op } from 'sequelize';
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
@@ -167,6 +167,95 @@ export class TranscriptRequestController {
       return await this.documentRequestService.createTranscriptRequest(createTranscriptRequestDto);
     } catch (error) {
       throw new BadRequestException(`Failed to create transcript request: ${error.message}`);
+    }
+  }
+  @Post('/to-whom-request')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    AnyFilesInterceptor(FileUploadConfig.getOptions('./uploads'))
+  )
+  @ApiOperation({ summary: 'Request To Whom It May Concern Letter' })
+  async createToWhomRequest(
+    @UploadedFiles() files: Array<Express.Multer.File>,
+    @Body() createToWhomRequestDto: CreateToWhomRequestDto
+  ) {
+    try {
+      const file = files.find(f => f.fieldname === 'fileurl');
+      const proofOfPaymentFile = files.find(f => f.fieldname === 'proofofpayment');
+
+      if (file) {
+        createToWhomRequestDto.fileurl = `${process.env.base_url}/uploads/${file.filename}`;
+      }
+      if (proofOfPaymentFile) {
+        createToWhomRequestDto.proofofpayment = `${process.env.base_url}/uploads/${proofOfPaymentFile.filename}`;
+      }
+
+      return await this.documentRequestService.createToWhom(createToWhomRequestDto);
+    } catch (error) {
+      throw new BadRequestException(`Failed to create To Whom It May Concern request: ${error.message}`);
+    }
+  }
+  @Get('/to-whom-request')
+  @ApiOperation({ summary: 'Get all To Whom It May Concern requests by filters' })
+  async findAllToWhomRequests(@Query() querry: QuerryFindAllRecomandationRequestDto) {
+    const whereClause: any = {};
+    if (querry.regnumber) {
+      whereClause.regnumber = querry.regnumber;
+    }
+    if (querry.requestedbyId) {
+      whereClause.requestedbyId = querry.requestedbyId;
+    }
+    if (querry.assignedToId) {
+      whereClause.assignedToId = querry.assignedToId;
+    }
+    if (querry.status) {
+      whereClause.status = querry.status;
+    }
+    if (querry.schoolId) {
+      whereClause.schoolId = querry.schoolId;
+    }
+    if (querry.departmentId) {
+      whereClause.departmentId = querry.departmentId;
+    }
+    if (querry.fromDate && querry.toDate) {
+      whereClause.createdAt = {
+        [Op.between]: [new Date(querry.fromDate), new Date(querry.toDate)],
+      };
+    }
+
+    return this.documentRequestService.findAllToWhom(whereClause);
+  }
+  @Get('/to-whom-request/:id')
+  @ApiOperation({ summary: 'Get a specific To Whom It May Concern request by ID' })
+  async findOneToWhomRequest(@Param('id') id: string) {
+    try {
+      return await this.documentRequestService.findOneToWhom(+id);
+    } catch (error) {
+      throw new BadRequestException(`Failed to retrieve To Whom It May Concern request: ${error.message}`);
+    }
+  }
+  @Patch('/to-whom-request/:id')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor(
+      'fileurl',
+      FileUploadConfig.getOptions('./uploads/to-whom'),
+    ),
+  )
+  @ApiBody({ type: UpdateToWhomRequestStaffDto, description: 'Form data for updating a To Whom It May Concern request' })
+  @ApiOperation({ summary: 'Update To Whom It May Concern request by ID ⚠️ done by staff' })
+  async updateToWhomRequestByStaff(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() updateToWhomRequestStaffDto: UpdateToWhomRequestStaffDto,
+  ) {
+    try {
+      if (file) {
+        updateToWhomRequestStaffDto.fileurl = `${process.env.base_url}/uploads/to-whom/${file.filename}`;
+      }
+      return await this.documentRequestService.updateToWhomByStaff(+id, updateToWhomRequestStaffDto);
+    } catch (error) {
+      throw new BadRequestException(`Failed to update To Whom It May Concern request by staff: ${error.message}`);
     }
   }
   @Post('/transcript/changes')

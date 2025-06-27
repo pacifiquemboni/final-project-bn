@@ -8,19 +8,19 @@ export class CreateRecomandationRequestDto {
     regnumber: string;
 
     @ApiProperty({ description: 'The ID of the user who requested the recommendation', example: 1 })
-    @IsInt()
+     
     requestedbyId: number;
 
     @ApiProperty({ description: 'The ID of the school', example: 2 })
-    @IsInt()
+     
     schoolId: number;
 
     @ApiProperty({ description: 'The ID of the department', example: 3 })
-    @IsInt()
+     
     departmentId: number;
 
     @ApiProperty({ description: 'The ID of the user assigned to handle the request', example: 4, required: false })
-    @IsInt()
+     
     @IsOptional()
     assignedToId?: number;
 
@@ -64,7 +64,18 @@ export class UpdateRecomandationRequestStaffDto {
     @IsEnum(['PENDING', 'APPROVED', 'REJECTED'])
     status?: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
-
+export class UpdateToWhomRequestStaffDto {
+    @ApiProperty({ description: 'The URL of the file associated with the request', format:'binary', required: false })
+    @IsOptional()
+    fileurl?: string;
+    @ApiProperty({
+        description: 'The status of the recommendation request',
+        example: 'APPROVED',
+        enum: ['PENDING', 'APPROVED', 'REJECTED'],
+    })
+    @IsEnum(['PENDING', 'APPROVED', 'REJECTED'])
+    status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
 
 export class QuerryFindAllRecomandationRequestDto {
     @ApiProperty({ description: 'The registration number of the requester', required: false })
@@ -103,4 +114,56 @@ export class QuerryFindAllRecomandationRequestDto {
 
     @ApiProperty({ description: 'The end date for filtering requests',  required: false })
     toDate?: Date;
+}
+export class CreateToWhomRequestDto {
+    @ApiProperty({ description: 'The registration number of the requester', example: 'REG123456' })
+    @IsString()
+    regnumber: string;
+
+    @ApiProperty({ description: 'The ID of the user who requested the letter', example: 1 })
+   
+    requestedbyId: number;
+
+    @ApiProperty({ description: 'The ID of the school', example: 2 })
+   
+    schoolId: number;
+
+    @ApiProperty({ description: 'The ID of the department', example: 3 })
+     
+    departmentId: number;
+
+    @ApiProperty({ description: 'The ID of the user assigned to handle the request', example: 4, required: false })
+     
+    @IsOptional()
+    assignedToId?: number;
+
+    @ApiProperty({ description: 'The reason for the to-whom-it-may-concern letter', example: 'For visa application' })
+    @IsString()
+    reason: string;
+
+    @ApiProperty({ description: 'Additional description for the request', example: 'Need it urgently', required: false })
+    @IsString()
+    @IsOptional()
+    description?: string;
+
+    
+    @IsOptional()
+    fileurl?: string;
+
+    @ApiProperty({
+        description: 'The status of the to-whom-it-may-concern letter request',
+        example: 'PENDING',
+        enum: ['PENDING', 'APPROVED', 'REJECTED'],
+    })
+    @IsEnum(['PENDING', 'APPROVED', 'REJECTED'])
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+
+    @ApiProperty({ description: 'The level of study of the requester', example: 'Undergraduate' })
+    @IsString()
+    levelOfStudy: string;
+
+    @ApiProperty({ description: 'Proof of payment file URL', example: 'https://example.com/payment.pdf', required: false, format:'binary' })
+    @IsString()
+    @IsOptional()
+    proofofpayment?: string;
 }
